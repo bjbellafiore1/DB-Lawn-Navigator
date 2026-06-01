@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DB Navigator">
+<meta name="theme-color" content="#0a0f1a">
+<title>DB Crew Navigator</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root{--green:#22c55e;--blue:#3b82f6;--bg:#0a0f1a;--bg2:#111827;--bg3:#1f2937;--border:#374151;--text:#f9fafb;--muted:#9ca3af;--dim:#6b7280;--red:#ef4444;--amber:#f59e0b;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;}
+.screen{display:none;height:100dvh;overflow-y:auto;flex-direction:column;}
+.screen.active{display:flex;}
+
+/* SETUP */
+.setup-hdr{padding:52px 20px 20px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;}
+.logo{font-size:12px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;}
+.logo span{color:var(--green);}
+.setup-title{font-size:26px;font-weight:800;}
+.setup-sub{font-size:14px;color:var(--muted);margin-top:4px;}
+.setup-body{flex:1;padding:20px;display:flex;flex-direction:column;gap:12px;padding-bottom:40px;}
+.day-card{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:18px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:all .15s;}
+.day-card:active{transform:scale(.97);background:var(--bg3);}
+.day-card.today{border-color:var(--green);background:rgba(34,197,94,.07);}
+.day-left{}
+.day-name{font-size:20px;font-weight:800;color:var(--text);}
+.day-today-pill{font-size:11px;font-weight:700;background:var(--green);color:#000;padding:3px 8px;border-radius:20px;display:inline-block;margin-bottom:6px;}
+.day-count{font-size:13px;color:var(--muted);margin-top:3px;}
+.day-arrow{font-size:22px;color:var(--dim);}
+.day-stops-preview{font-size:12px;color:var(--dim);margin-top:6px;line-height:1.5;}
+
+/* NAV */
+#nav-screen{background:var(--bg);}
+.nav-top{background:var(--bg2);border-bottom:1px solid var(--border);padding:48px 20px 16px;flex-shrink:0;}
+.nav-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.nav-lbl{font-size:12px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;}
+.gps-pill{font-size:11px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;}
+.gps-pill.on{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3);}
+.gps-pill.off{background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.2);}
+.gps-dot{width:7px;height:7px;border-radius:50%;}
+.gps-pill.on .gps-dot{background:var(--green);animation:pulse 1.5s infinite;}
+.gps-pill.off .gps-dot{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.nav-name{font-size:22px;font-weight:800;line-height:1.2;margin-bottom:4px;}
+.nav-addr{font-size:14px;color:var(--muted);margin-bottom:12px;line-height:1.4;}
+.nav-dist{font-size:34px;font-weight:800;color:var(--green);}
+.nav-dist small{font-size:14px;font-weight:400;color:var(--dim);}
+.nav-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;}
+.nav-btn{padding:14px 10px;border-radius:14px;border:none;font-size:14px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all .15s;}
+.nav-btn:active{transform:scale(.93);}
+.nav-btn .bi{font-size:22px;}
+.nav-btn.maps{background:#1a56db;color:#fff;}
+.nav-btn.waze{background:#33ccff;color:#000;}
+.nav-btn.done{background:var(--green);color:#000;grid-column:1/-1;flex-direction:row;justify-content:center;gap:10px;font-size:17px;padding:18px;}
+.nav-btn.skip{background:var(--bg3);color:var(--amber);border:1px solid rgba(245,158,11,.3);}
+.nav-scroll{flex:1;overflow-y:auto;padding:16px 20px 120px;}
+.prog-row{display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:var(--muted);}
+.prog-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-bottom:14px;}
+.prog-fill{height:100%;background:var(--green);border-radius:3px;transition:width .5s;}
+.map-wrap{height:220px;border-radius:14px;overflow:hidden;border:1px solid var(--border);margin-bottom:14px;}
+.section-hdr{font-size:12px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;padding:10px 0 8px;}
+.stops-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:14px;}
+.stops-title{padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;justify-content:space-between;}
+.skip-count{background:rgba(245,158,11,.2);color:var(--amber);font-size:11px;padding:2px 8px;border-radius:20px;}
+.srow{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border);}
+.srow:last-child{border-bottom:none;}
+.snum{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;}
+.snum.done{background:rgba(34,197,94,.2);color:var(--green);}
+.snum.cur{background:var(--blue);color:#fff;}
+.snum.up{background:var(--bg3);color:var(--dim);}
+.snum.sk{background:rgba(245,158,11,.2);color:var(--amber);}
+.sinfo{flex:1;min-width:0;}
+.sn{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sn.faded{color:var(--dim);}
+.sa{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.sbadge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;flex-shrink:0;}
+.bd{background:rgba(34,197,94,.15);color:var(--green);}
+.bc{background:rgba(59,130,246,.2);color:#93c5fd;}
+.bu{background:var(--bg3);color:var(--dim);}
+.bs{background:rgba(245,158,11,.2);color:var(--amber);}
+
+/* SKIPPED PANEL */
+.skipped-panel{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:16px;overflow:hidden;margin-bottom:14px;}
+.skipped-hdr{padding:12px 16px;border-bottom:1px solid rgba(245,158,11,.2);font-size:13px;font-weight:700;color:var(--amber);display:flex;align-items:center;gap:8px;}
+.skip-row{padding:12px 16px;border-bottom:1px solid rgba(245,158,11,.1);display:flex;align-items:center;gap:12px;}
+.skip-row:last-child{border-bottom:none;}
+.skip-info{flex:1;min-width:0;}
+.skip-name{font-size:14px;font-weight:600;color:var(--text);}
+.skip-addr{font-size:12px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.skip-nav-btn{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.skip-nav-btn:active{transform:scale(.95);}
+
+/* DONE */
+#done-screen{background:var(--bg);justify-content:flex-start;overflow-y:auto;}
+.done-hdr{padding:52px 20px 20px;background:var(--bg2);border-bottom:1px solid var(--border);}
+.done-icon{font-size:48px;margin-bottom:8px;}
+.done-title{font-size:26px;font-weight:800;}
+.done-sub{font-size:14px;color:var(--muted);margin-top:4px;}
+.done-body{padding:20px;display:flex;flex-direction:column;gap:14px;padding-bottom:60px;}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.stat-box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;}
+.stat-num{font-size:32px;font-weight:800;}
+.stat-lbl{font-size:13px;color:var(--dim);margin-top:2px;}
+.stat-box.green .stat-num{color:var(--green);}
+.stat-box.amber .stat-num{color:var(--amber);}
+.skipped-done-card{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:16px;overflow:hidden;}
+.skipped-done-hdr{padding:14px 16px;border-bottom:1px solid rgba(245,158,11,.2);font-size:14px;font-weight:700;color:var(--amber);}
+.skipped-done-row{padding:14px 16px;border-bottom:1px solid rgba(245,158,11,.1);display:flex;align-items:center;gap:12px;}
+.skipped-done-row:last-child{border-bottom:none;}
+.skipped-done-info{flex:1;min-width:0;}
+.skipped-done-name{font-size:15px;font-weight:600;color:var(--text);}
+.skipped-done-addr{font-size:12px;color:var(--dim);margin-top:2px;}
+.btn{width:100%;padding:17px;border-radius:14px;border:none;font-size:17px;font-weight:800;cursor:pointer;transition:all .15s;}
+.btn:active{transform:scale(.97);}
+.btn-green{background:var(--green);color:#000;}
+.back-btn{background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px;}
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div class="screen active" id="setup-screen">
+  <div class="setup-hdr">
+    <div class="logo">Dana Bellafiore <span>Lawn & Landscape</span></div>
+    <div class="setup-title">Crew Navigator</div>
+    <div class="setup-sub">Select today's day to begin</div>
+  </div>
+  <div class="setup-body" id="day-list"></div>
+</div>
+
+<!-- NAV -->
+<div class="screen" id="nav-screen">
+  <div class="nav-top">
+    <div class="nav-meta">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="back-btn" onclick="goHome()">← Days</button>
+        <div class="nav-lbl" id="nav-lbl">Stop 1 of —</div>
+      </div>
+      <div class="gps-pill off" id="gps-pill"><div class="gps-dot"></div><span id="gps-txt">No GPS</span></div>
+    </div>
+    <div class="nav-name" id="nav-name">—</div>
+    <div class="nav-addr" id="nav-addr">—</div>
+    <div class="nav-dist" id="nav-dist"><small>Locating...</small></div>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-btn maps" onclick="openMaps()"><span class="bi">🗺</span>Google Maps</button>
+    <button class="nav-btn waze" onclick="openWaze()"><span class="bi">🚗</span>Waze</button>
+    <button class="nav-btn done" onclick="markDone()">✓ &nbsp; Job complete — next stop</button>
+    <button class="nav-btn skip" onclick="skipStop()">⚑ &nbsp; Skip — add to missed list</button>
+  </div>
+  <div class="nav-scroll">
+    <div class="prog-row"><span id="prog-lbl">0 of 0 complete</span><span id="skip-count-badge" style="color:var(--amber);font-size:13px;"></span></div>
+    <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    <div class="map-wrap"><div id="map" style="width:100%;height:100%;"></div></div>
+    <div id="skipped-live" style="display:none;" class="skipped-panel">
+      <div class="skipped-hdr">⚑ Skipped stops — tap to navigate</div>
+      <div id="skipped-live-list"></div>
+    </div>
+    <div class="stops-card">
+      <div class="stops-title"><span>All stops</span><span class="skip-count" id="skip-badge" style="display:none;"></span></div>
+      <div id="stop-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DONE -->
+<div class="screen" id="done-screen">
+  <div class="done-hdr">
+    <div class="done-icon">🎉</div>
+    <div class="done-title">Day complete!</div>
+    <div class="done-sub" id="done-sub"></div>
+  </div>
+  <div class="done-body">
+    <div class="stat-grid" id="stat-grid"></div>
+    <div id="skipped-done-section"></div>
+    <button class="btn btn-green" onclick="resetAll()">← Back to days</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ─── SCHEDULE ───────────────────────────────────────────────────────────────
+const SCHEDULE = {
+  MONDAY: [
+    {name:"O'Leary, Kristina",       address:"1801 Chestnut Hollow Ln, West Chester, PA 19382"},
+    {name:"Yeomens, Jan",             address:"1701 Warpath Rd, West Chester, PA"},
+    {name:"Sturm, Tom",               address:"91 Indian Hanna Rd, West Chester, PA 19382"},
+    {name:"Pocopson Creek HOA",       address:"Galvin Circle, Kennett Square, PA"},
+    {name:"Baichi, Matt",             address:"112 Galvin Circle, Kennett Square, PA 19348"},
+    {name:"Connolly, Dan",            address:"106 Galvin Circle, Kennett Square, PA 19348"},
+    {name:"Kirk, Jason",              address:"804 Roberts Way, Kennett Square, PA 19348"},
+    {name:"Kirk Basin (monthly)",     address:"804 Roberts Way, Kennett Square, PA 19348"},
+    {name:"Bernards Rental",          address:"1069 Unionville Wawaset Rd, Kennett Square, PA"},
+    {name:"Jefferis, David",          address:"700 Denbigh Chase, Kennett Square, PA 19348"},
+    {name:"Pierce, Pam",              address:"298 Hickory Drive, Kennett Square, PA 19348"},
+    {name:"Giannantonio, Carmen",     address:"704 Denbigh Chase, Kennett Square, PA 19348"},
+    {name:"Faughan, Pat",             address:"1 Greenbriar Ln, Kennett Square, PA 19348"},
+    {name:"Doyle, Frank",             address:"1160 Meghan Court, West Chester, PA 19382"},
+    {name:"Gray III, Harry",          address:"173 S Bridge Rd, West Chester, PA"},
+    {name:"Cirka, Kevin",             address:"1577 Bright Glade, Downingtown, PA 19320"},
+    {name:"Markey, Sean",             address:"1312 Brownsville Rd, Downingtown, PA"},
+    {name:"Roberts, Daryl",           address:"1541 High Country Rd, Downingtown, PA 19320"},
+    {name:"Witkowski, Kevin",         address:"1522 High Country Rd, Downingtown, PA 19335"},
+    {name:"Musallam, Sam",            address:"1530 High Country Rd, Downingtown, PA 19335"},
+    {name:"Muller, Tom",              address:"1524 Elk Run, Downingtown, PA 19335"},
+    {name:"Rodia, Janet",             address:"15328 High Country, Downingtown, PA 19335"},
+  ],
+  TUESDAY: [
+    {name:"Gray Shop",                address:"1881 W Strasburg Rd, Coatesville, PA"},
+    {name:"Marshalton Apt.",          address:"1301 W Strasburg Rd, West Chester, PA"},
+    {name:"Buttenbaun, Ryan",         address:"918 Copes Ln, West Chester, PA"},
+    {name:"Wood, Dennis",             address:"923 Copes Ln, West Chester, PA"},
+    {name:"Volcheck, Diana",          address:"1046 General Allen Dr, West Chester, PA 19382"},
+    {name:"Guido, George",            address:"683 Militia Hill Rd, West Chester, PA 19382"},
+    {name:"Beasley, Liz",             address:"672 Casey Ln, West Chester, PA 19382"},
+    {name:"Mayer, Jim",               address:"696 Paddock Circle, West Chester, PA 19382"},
+    {name:"Bernstein, Ben",           address:"1319 Field Point Drive, West Chester, PA 19382"},
+    {name:"Shank, Heather",           address:"1948 Field Point Drive, West Chester, PA 19382"},
+    {name:"Kriza, Craig",             address:"1343 Field Point Drive, West Chester, PA 19382"},
+    {name:"Murphy, Mike",             address:"1347 Field Point Drive, West Chester, PA 19382"},
+    {name:"Volvo Dealership",         address:"1290 Wilmington Pike, West Chester, PA"},
+    {name:"Volvo Sales Lot",          address:"56 Penn Oaks Dr, West Chester, PA"},
+    {name:"Bieg, Richard",            address:"627 Britons Bridge Road, West Chester, PA"},
+    {name:"Morgan, Dan",              address:"826 Pheasant Run Rd, West Chester, PA"},
+    {name:"Worteck, Susan",           address:"550 Webb Rd, West Chester, PA"},
+    {name:"Worteck Field (monthly)",  address:"550 Webb Rd, West Chester, PA"},
+    {name:"Powell, Jonathan",         address:"18 Twin Turns, Chadds Ford, PA 19317"},
+    {name:"Scaggs, Colette",          address:"1239 White Wood Way, West Chester, PA 19382"},
+    {name:"Mangily, Shawn",           address:"1072 Ballintree Ln, West Chester, PA 19382"},
+    {name:"Zhu, Yuntao",              address:"1040 Ballin Tree Ln, West Chester, PA 19382"},
+    {name:"Courts of Longwood HOA",   address:"Courts at Longwood, Kennett Square, PA"},
+  ],
+  WEDNESDAY: [
+    {name:"Gamble, Ray & Terry",      address:"10 Deblyn Ln, West Chester, PA 19382"},
+    {name:"Levine, David",            address:"1842 Huntsman Lane, West Chester, PA 19382"},
+    {name:"Dembek, Scott",            address:"102 Osborne Cir, Kennett Square, PA 19348"},
+    {name:"Trainer, Amy",             address:"1656 Emeryville Rd, Coatesville, PA 19320"},
+    {name:"Davidson, Carol",          address:"430 Upland Road, Kennett Square, PA 19348"},
+    {name:"KSQ Vet",                  address:"619 N Mill Rd, Kennett Square, PA 19348"},
+    {name:"Khan, Ethan",              address:"114 West Clay Creek Lane, Kennett Square, PA 19348"},
+    {name:"Gaffney, Chris",           address:"639 Unionville Road, Kennett Square, PA 19348"},
+    {name:"Sosangelis, Ellen",        address:"114 Marlbrooke Way, Kennett Square, PA 19348"},
+    {name:"Bocchino, Frankie",        address:"112 Marlbrooke Way, Kennett Square, PA 19348"},
+    {name:"Chance, Beth",             address:"119 East Locust Lane, Kennett Square, PA 19348"},
+    {name:"Strawely",                 address:"717 Beversrede Trail, Kennett Square, PA 19382"},
+    {name:"Young, Ryan",              address:"1444 Telegraph Road, West Chester, PA"},
+    {name:"Morgan, Mike",             address:"1452 Telegraph Road, West Chester, PA"},
+  ],
+  THURSDAY: [
+    {name:"Bellafiore, Dana",         address:"525 Brandywine Dr, West Chester, PA 19382"},
+    {name:"Piasecki Aircraft Corp",   address:"110 E Stewart Hutson Dr, Coatesville, PA"},
+    {name:"Ferguson PH (monthly)",    address:"25 Whissell Drive, Coatesville, PA 19320"},
+  ],
+};
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let todayStops=[], skippedStops=[], currentIdx=0;
+let watchId=null, userCoords=null;
+let map=null, userMarker=null, destMarker=null, routeLine=null;
+let selectedDay=null;
+
+// ─── SCREENS ─────────────────────────────────────────────────────────────────
+function show(id){['setup-screen','nav-screen','done-screen'].forEach(s=>document.getElementById(s).classList.remove('active'));document.getElementById(id).classList.add('active');}
+
+// ─── BUILD DAY LIST ───────────────────────────────────────────────────────────
+function buildDayList(){
+  const todayKey=['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'][new Date().getDay()];
+  const container=document.getElementById('day-list');
+  container.innerHTML=Object.entries(SCHEDULE).map(([day,stops])=>{
+    const isToday=day===todayKey;
+    const preview=stops.slice(0,3).map(s=>s.name.split(',')[0]).join(', ')+(stops.length>3?' +more':'');
+    return `<div class="day-card${isToday?' today':''}" onclick="startDay('${day}')">
+      <div class="day-left">
+        ${isToday?'<div class="day-today-pill">TODAY</div>':''}
+        <div class="day-name">${day.charAt(0)+day.slice(1).toLowerCase()}</div>
+        <div class="day-count">${stops.length} stops</div>
+        <div class="day-stops-preview">${preview}</div>
+      </div>
+      <div class="day-arrow">›</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── START DAY ────────────────────────────────────────────────────────────────
+function startDay(day){
+  selectedDay=day;
+  todayStops=SCHEDULE[day].map((s,i)=>({...s,idx:i,coords:null,done:false,skipped:false}));
+  skippedStops=[];
+  currentIdx=0;
+  show('nav-screen');
+  initMap();
+  startGPS();
+  renderAll();
+}
+
+function goHome(){
+  if(watchId)navigator.geolocation.clearWatch(watchId);
+  if(map){map.remove();map=null;}
+  watchId=null;userCoords=null;userMarker=null;destMarker=null;routeLine=null;
+  show('setup-screen');
+}
+
+// ─── MAP ─────────────────────────────────────────────────────────────────────
+function initMap(){
+  if(map){map.remove();map=null;}
+  setTimeout(()=>{
+    map=L.map('map',{zoomControl:false,attributionControl:false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    map.setView([39.96,-75.6],12);
+    geocodeStop(currentIdx);
+  },200);
+}
+
+// ─── GPS ─────────────────────────────────────────────────────────────────────
+function startGPS(){
+  if(!navigator.geolocation){setGPS(false);return;}
+  watchId=navigator.geolocation.watchPosition(pos=>{
+    userCoords={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    setGPS(true);updateUserMarker();updateDist();
+  },()=>setGPS(false),{enableHighAccuracy:true,maximumAge:8000,timeout:20000});
+}
+function setGPS(on){
+  document.getElementById('gps-txt').textContent=on?'GPS live':'No GPS';
+  document.getElementById('gps-pill').className='gps-pill '+(on?'on':'off');
+}
+function updateUserMarker(){
+  if(!map)return;
+  const pos=[userCoords.lat,userCoords.lng];
+  if(!userMarker){
+    const icon=L.divIcon({html:'<div style="width:18px;height:18px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 4px rgba(59,130,246,.25);"></div>',className:'',iconAnchor:[9,9]});
+    userMarker=L.marker(pos,{icon,zIndexOffset:1000}).addTo(map);
+  }else userMarker.setLatLng(pos);
+  if(destMarker){
+    const d=destMarker.getLatLng();
+    if(routeLine)map.removeLayer(routeLine);
+    routeLine=L.polyline([pos,[d.lat,d.lng]],{color:'#3b82f6',weight:3,dashArray:'8,5',opacity:.8}).addTo(map);
+  }
+}
+
+// ─── GEOCODE ─────────────────────────────────────────────────────────────────
+async function geocodeStop(idx){
+  const stop=todayStops[idx];if(!stop||stop.coords)return placeDestMarker(idx);
+  try{
+    const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(stop.address)+'&limit=1',{headers:{'Accept-Language':'en'}});
+    const d=await r.json();
+    if(d&&d.length)stop.coords={lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon)};
+  }catch(e){}
+  placeDestMarker(idx);
+  // Pre-geocode next stop quietly
+  const next=todayStops[idx+1];
+  if(next&&!next.coords)setTimeout(()=>geocodeStop(idx+1),1500);
+}
+
+function placeDestMarker(idx){
+  if(!map)return;
+  const stop=todayStops[idx];if(!stop||!stop.coords)return;
+  if(destMarker)map.removeLayer(destMarker);
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  const icon=L.divIcon({html:`<div style="background:#ef4444;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;border:3px solid #fff;">${idx+1}</div>`,className:'',iconAnchor:[17,17]});
+  destMarker=L.marker([stop.coords.lat,stop.coords.lng],{icon}).addTo(map);
+  const pts=[[stop.coords.lat,stop.coords.lng]];
+  if(userCoords)pts.push([userCoords.lat,userCoords.lng]);
+  map.fitBounds(pts,{padding:[40,40]});
+  if(userCoords)updateUserMarker();
+  updateDist();
+}
+
+// ─── DISTANCE ────────────────────────────────────────────────────────────────
+function haversine(a,b){
+  const R=3958.8,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lng-a.lng)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function updateDist(){
+  const stop=todayStops[currentIdx];const el=document.getElementById('nav-dist');
+  if(!stop||!stop.coords||!userCoords){el.innerHTML='<small>Locating you...</small>';return;}
+  const mi=haversine(userCoords,stop.coords);
+  el.innerHTML=mi<0.05?'<span style="color:var(--green)">You are here</span>':mi<0.2?Math.round(mi*5280)+' <small>ft away</small>':mi.toFixed(1)+' <small>mi away</small>';
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderAll(){
+  const stop=todayStops[currentIdx];
+  if(!stop){showDone();return;}
+  document.getElementById('nav-lbl').textContent=selectedDay.charAt(0)+selectedDay.slice(1).toLowerCase()+' — Stop '+(currentIdx+1)+' of '+todayStops.length;
+  document.getElementById('nav-name').textContent=stop.name;
+  document.getElementById('nav-addr').textContent=stop.address;
+  const done=todayStops.filter(s=>s.done).length;
+  const skipped=skippedStops.length;
+  document.getElementById('prog-fill').style.width=Math.round((done/todayStops.length)*100)+'%';
+  document.getElementById('prog-lbl').textContent=done+' of '+todayStops.length+' complete';
+  document.getElementById('skip-count-badge').textContent=skipped?'⚑ '+skipped+' skipped':'';
+  const skipBadge=document.getElementById('skip-badge');
+  if(skipped){skipBadge.style.display='';skipBadge.textContent=skipped+' skipped';}
+  else skipBadge.style.display='none';
+  renderSkippedLive();
+  renderStopList();
+}
+
+function renderSkippedLive(){
+  const panel=document.getElementById('skipped-live');
+  const list=document.getElementById('skipped-live-list');
+  if(!skippedStops.length){panel.style.display='none';return;}
+  panel.style.display='block';
+  list.innerHTML=skippedStops.map((s,i)=>`
+    <div class="skip-row">
+      <div class="skip-info">
+        <div class="skip-name">${s.name}</div>
+        <div class="skip-addr">${s.address}</div>
+      </div>
+      <button class="skip-nav-btn" onclick="navigateSkipped(${i})">Navigate ›</button>
+    </div>`).join('');
+}
+
+function renderStopList(){
+  document.getElementById('stop-list').innerHTML=todayStops.map((s,i)=>{
+    const state=s.done?'done':s.skipped?'sk':i===currentIdx?'cur':'up';
+    const numHtml=s.done?'✓':s.skipped?'⚑':i+1;
+    const badgeTxt=s.done?'Done':s.skipped?'Skipped':i===currentIdx?'Now':'Next';
+    const badgeCls=s.done?'bd':s.skipped?'bs':i===currentIdx?'bc':'bu';
+    return `<div class="srow">
+      <div class="snum ${state}">${numHtml}</div>
+      <div class="sinfo">
+        <div class="sn ${s.done?'faded':''}">${s.name}</div>
+        <div class="sa">${s.address}</div>
+      </div>
+      <span class="sbadge ${badgeCls}">${badgeTxt}</span>
+    </div>`;
+  }).join('');
+}
+
+// ─── ACTIONS ─────────────────────────────────────────────────────────────────
+function openMaps(){
+  const s=todayStops[currentIdx];if(!s)return;
+  window.open('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(s.address)+'&travelmode=driving','_blank');
+}
+function openWaze(){
+  const s=todayStops[currentIdx];if(!s||!s.coords)return;
+  window.open('https://waze.com/ul?ll='+s.coords.lat+','+s.coords.lng+'&navigate=yes','_blank');
+}
+function markDone(){
+  todayStops[currentIdx].done=true;
+  advance();
+}
+function skipStop(){
+  todayStops[currentIdx].skipped=true;
+  skippedStops.push({...todayStops[currentIdx]});
+  advance();
+}
+function navigateSkipped(skippedIdx){
+  const s=skippedStops[skippedIdx];if(!s)return;
+  window.open('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(s.address)+'&travelmode=driving','_blank');
+}
+function advance(){
+  let next=currentIdx+1;
+  while(next<todayStops.length&&(todayStops[next].done||todayStops[next].skipped))next++;
+  if(next>=todayStops.length){showDone();return;}
+  currentIdx=next;
+  if(destMarker){map.removeLayer(destMarker);destMarker=null;}
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  renderAll();
+  geocodeStop(currentIdx);
+  updateDist();
+}
+
+// ─── DONE SCREEN ─────────────────────────────────────────────────────────────
+function showDone(){
+  if(watchId)navigator.geolocation.clearWatch(watchId);
+  const done=todayStops.filter(s=>s.done).length;
+  const skipped=skippedStops.length;
+  document.getElementById('done-sub').textContent=selectedDay.charAt(0)+selectedDay.slice(1).toLowerCase()+' wrap-up';
+  document.getElementById('stat-grid').innerHTML=`
+    <div class="stat-box green"><div class="stat-num">${done}</div><div class="stat-lbl">Jobs complete</div></div>
+    <div class="stat-box amber"><div class="stat-num">${skipped}</div><div class="stat-lbl">Skipped / missed</div></div>`;
+  const sec=document.getElementById('skipped-done-section');
+  if(skipped){
+    sec.innerHTML=`<div class="skipped-done-card">
+      <div class="skipped-done-hdr">⚑ Skipped stops — follow up needed</div>
+      ${skippedStops.map(s=>`
+        <div class="skipped-done-row">
+          <div class="skipped-done-info">
+            <div class="skipped-done-name">${s.name}</div>
+            <div class="skipped-done-addr">${s.address}</div>
+          </div>
+          <button class="skip-nav-btn" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent('${s.address}')+'&travelmode=driving','_blank')">Maps ›</button>
+        </div>`).join('')}
+    </div>`;
+  } else {
+    sec.innerHTML=`<div style="text-align:center;padding:20px;color:var(--green);font-size:15px;font-weight:700;">✓ All stops completed — clean day!</div>`;
+  }
+  show('done-screen');
+}
+
+function resetAll(){
+  if(watchId)navigator.geolocation.clearWatch(watchId);
+  if(map){map.remove();map=null;}
+  watchId=null;userCoords=null;userMarker=null;destMarker=null;routeLine=null;
+  todayStops=[];skippedStops=[];currentIdx=0;selectedDay=null;
+  show('setup-screen');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+buildDayList();
+</script>
+</body>
+</html>
